@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Interpolador Cuadrático</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;600;800&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg: #0a0e1a;
+      --surface: #111827;
+      --surface2: #1a2235;
+      --border: #1e3a5f;
+      --accent: #00d4ff;
+      --accent2: #7c3aed;
+      --accent3: #10b981;
+      --warn: #f59e0b;
+      --danger: #ef4444;
+      --text: #e2e8f0;
+      --text-muted: #64748b;
+      --glow: 0 0 20px rgba(0,212,255,0.3);
+      --glow2: 0 0 20px rgba(124,58,237,0.3);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Syne', sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Grid background */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Glow orbs */
+    body::after {
+      content: '';
+      position: fixed;
+      top: -200px;
+      right: -200px;
+      width: 600px;
+      height: 600px;
+      background: radial-gradient(circle, rgba(124,58,237,0.12) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .container {
+      position: relative;
+      z-index: 1;
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 4rem;
+    }
+
+    /* Header */
+    header {
+      text-align: center;
+      margin-bottom: 3rem;
+      padding-top: 1rem;
+    }
+    .badge {
+      display: inline-block;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.2em;
+      color: var(--accent);
+      background: rgba(0,212,255,0.08);
+      border: 1px solid rgba(0,212,255,0.2);
+      padding: 0.35rem 1rem;
+      border-radius: 999px;
+      margin-bottom: 1rem;
+      text-transform: uppercase;
+    }
+    h1 {
+      font-size: clamp(2rem, 5vw, 3.5rem);
+      font-weight: 800;
+      line-height: 1.1;
+      background: linear-gradient(135deg, #fff 20%, var(--accent) 60%, var(--accent2) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 0.75rem;
+    }
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 1rem;
+      font-weight: 400;
+      max-width: 500px;
+      margin: 0 auto;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.85rem;
+    }
+
+    /* Layout principal */
+    .main-grid {
+      display: grid;
+      grid-template-columns: 380px 1fr;
+      gap: 1.5rem;
+      align-items: start;
+    }
+    @media (max-width: 800px) {
+      .main-grid { grid-template-columns: 1fr; }
+    }
+
+    /* Panels */
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+    }
+    .panel-header {
+      padding: 1.2rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .panel-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+    }
+    .panel-icon.cyan { background: rgba(0,212,255,0.15); }
+    .panel-icon.purple { background: rgba(124,58,237,0.15); }
+    .panel-icon.green { background: rgba(16,185,129,0.15); }
+    .panel-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+    }
+    .panel-body { padding: 1.5rem; }
+
+    /* Tabla de puntos */
+    .points-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 1rem;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.85rem;
+    }
+    .points-table thead tr {
+      border-bottom: 1px solid var(--border);
+    }
+    .points-table th {
+      text-align: left;
+      padding: 0.5rem 0.6rem;
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+    .points-table td {
+      padding: 0.4rem 0.4rem;
+    }
+    .points-table tr { transition: background 0.15s; }
+    .points-table tbody tr:hover { background: rgba(255,255,255,0.02); }
+
+    .point-idx {
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      width: 24px;
+      text-align: center;
+    }
+
+    /* Inputs */
+    .coord-input {
+      width: 100%;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-family: 'Space Mono', monospace;
+      font-size: 0.9rem;
+      padding: 0.45rem 0.7rem;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      -moz-appearance: textfield;
+    }
+    .coord-input::-webkit-inner-spin-button,
+    .coord-input::-webkit-outer-spin-button { -webkit-appearance: none; }
+    .coord-input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(0,212,255,0.1);
+    }
+
+    /* Botones de acción en tabla */
+    .btn-remove {
+      background: rgba(239,68,68,0.1);
+      border: 1px solid rgba(239,68,68,0.2);
+      color: var(--danger);
+      border-radius: 6px;
+      width: 28px;
+      height: 28px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s;
+      flex-shrink: 0;
+    }
+    .btn-remove:hover { background: rgba(239,68,68,0.25); }
+
+    /* Botones principales */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 0.65rem 1.25rem;
+      border-radius: 10px;
+      font-family: 'Syne', sans-serif;
+      font-weight: 600;
+      font-size: 0.875rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: none;
+      letter-spacing: 0.02em;
+    }
+    .btn-add {
+      background: rgba(0,212,255,0.1);
+      border: 1px solid rgba(0,212,255,0.25);
+      color: var(--accent);
+      width: 100%;
+    }
+    .btn-add:hover {
+      background: rgba(0,212,255,0.18);
+      box-shadow: var(--glow);
+      transform: translateY(-1px);
+    }
+    .btn-solve {
+      background: linear-gradient(135deg, var(--accent2), var(--accent));
+      color: #fff;
+      width: 100%;
+      font-size: 1rem;
+      padding: 0.85rem;
+      margin-top: 0.75rem;
+      box-shadow: 0 4px 24px rgba(0,212,255,0.2);
+    }
+    .btn-solve:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 32px rgba(0,212,255,0.35);
+    }
+    .btn-solve:active { transform: translateY(0); }
+    .btn-clear {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      width: 100%;
+      margin-top: 0.5rem;
+    }
+    .btn-clear:hover { border-color: var(--danger); color: var(--danger); }
+
+    /* Mensaje de error/info */
+    .msg {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.78rem;
+      border-radius: 8px;
+      padding: 0.65rem 0.9rem;
+      margin-top: 0.75rem;
+      display: none;
+    }
+    .msg.error {
+      background: rgba(239,68,68,0.1);
+      border: 1px solid rgba(239,68,68,0.25);
+      color: #fca5a5;
+      display: block;
+    }
+    .msg.info {
+      background: rgba(245,158,11,0.1);
+      border: 1px solid rgba(245,158,11,0.2);
+      color: #fcd34d;
+      display: block;
+    }
+
+    /* Panel de resultados */
+    .result-empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 1rem;
+      color: var(--text-muted);
+      font-family: 'Space Mono', monospace;
+      font-size: 0.8rem;
+      text-align: center;
+      gap: 1rem;
+    }
+    .result-empty-icon {
+      font-size: 2.5rem;
+      opacity: 0.3;
+    }
+
+    /* Ecuación resultado */
+    .equation-box {
+      background: linear-gradient(135deg, rgba(0,212,255,0.06), rgba(124,58,237,0.06));
+      border: 1px solid rgba(0,212,255,0.2);
+      border-radius: 12px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 1.25rem;
+      text-align: center;
+    }
+    .equation-label {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      margin-bottom: 0.6rem;
+      font-family: 'Space Mono', monospace;
+    }
+    .equation-text {
+      font-family: 'Space Mono', monospace;
+      font-size: clamp(0.9rem, 2vw, 1.15rem);
+      color: var(--accent);
+      letter-spacing: 0.02em;
+      word-break: break-all;
+    }
+    .coef-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.75rem;
+      margin-bottom: 1.25rem;
+    }
+    .coef-card {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.85rem;
+      text-align: center;
+    }
+    .coef-label {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      font-family: 'Space Mono', monospace;
+      letter-spacing: 0.1em;
+      margin-bottom: 0.3rem;
+    }
+    .coef-value {
+      font-family: 'Space Mono', monospace;
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .coef-card:nth-child(1) .coef-value { color: var(--accent); }
+    .coef-card:nth-child(2) .coef-value { color: var(--accent2); }
+    .coef-card:nth-child(3) .coef-value { color: var(--accent3); }
+
+    /* Canvas gráfico */
+    .canvas-wrap {
+      position: relative;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+    }
+    canvas { display: block; width: 100%; }
+
+    /* Evaluador */
+    .eval-section {
+      margin-top: 1rem;
+    }
+    .eval-row {
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+    }
+    .eval-input-wrap {
+      flex: 1;
+      position: relative;
+    }
+    .eval-label-float {
+      position: absolute;
+      left: 0.8rem;
+      top: 50%;
+      transform: translateY(-50%);
+      font-family: 'Space Mono', monospace;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      pointer-events: none;
+    }
+    .eval-input {
+      width: 100%;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      font-family: 'Space Mono', monospace;
+      font-size: 0.95rem;
+      padding: 0.65rem 0.75rem 0.65rem 2.5rem;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      -moz-appearance: textfield;
+    }
+    .eval-input::-webkit-inner-spin-button,
+    .eval-input::-webkit-outer-spin-button { -webkit-appearance: none; }
+    .eval-input:focus {
+      border-color: var(--accent3);
+      box-shadow: 0 0 0 3px rgba(16,185,129,0.1);
+    }
+    .btn-eval {
+      background: rgba(16,185,129,0.12);
+      border: 1px solid rgba(16,185,129,0.3);
+      color: var(--accent3);
+      padding: 0.65rem 1.2rem;
+      border-radius: 10px;
+      font-family: 'Syne', sans-serif;
+      font-weight: 600;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .btn-eval:hover {
+      background: rgba(16,185,129,0.22);
+      box-shadow: 0 0 16px rgba(16,185,129,0.25);
+    }
+    .eval-result {
+      margin-top: 0.75rem;
+      background: rgba(16,185,129,0.07);
+      border: 1px solid rgba(16,185,129,0.2);
+      border-radius: 10px;
+      padding: 0.75rem 1rem;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.9rem;
+      display: none;
+    }
+    .eval-result span { color: var(--accent3); font-weight: 700; }
+
+    /* Animación entrada */
+    @keyframes fadeSlideIn {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .panel { animation: fadeSlideIn 0.4s ease both; }
+    .panel:nth-child(2) { animation-delay: 0.1s; }
+
+    @keyframes rowIn {
+      from { opacity: 0; transform: translateX(-10px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+    .point-row { animation: rowIn 0.2s ease both; }
+
+    /* Scroll en tabla */
+    .table-scroll { max-height: 260px; overflow-y: auto; }
+    .table-scroll::-webkit-scrollbar { width: 4px; }
+    .table-scroll::-webkit-scrollbar-track { background: transparent; }
+    .table-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <div class="badge">Análisis Numérico</div>
+    <h1>Interpolador Cuadrático</h1>
+    <p class="subtitle">Ingresá tus puntos → obtenés la función y = ax² + bx + c que los atraviesa</p>
+  </header>
+
+  <div class="main-grid">
+
+    <!-- Panel izquierdo: puntos -->
+    <div>
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-icon cyan">📍</div>
+          <span class="panel-title">Puntos de entrada</span>
+        </div>
+        <div class="panel-body">
+          <div class="table-scroll">
+            <table class="points-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>x</th>
+                  <th>y</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="pointsBody"></tbody>
+            </table>
+          </div>
+
+          <button class="btn btn-add" onclick="addPoint()">＋ Agregar punto</button>
+          <div id="msgBox" class="msg"></div>
+          <button class="btn btn-solve" onclick="solve()">▶ Calcular interpolación</button>
+          <button class="btn btn-clear" onclick="clearAll()">✕ Limpiar todo</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Panel derecho: resultados -->
+    <div>
+      <div class="panel" id="resultPanel">
+        <div class="panel-header">
+          <div class="panel-icon purple">📈</div>
+          <span class="panel-title">Resultado</span>
+        </div>
+        <div class="panel-body" id="resultBody">
+          <div class="result-empty">
+            <div class="result-empty-icon">∫</div>
+            <div>Ingresá al menos <strong>3 puntos</strong> y presioná<br/>"Calcular interpolación"</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Panel evaluador -->
+      <div class="panel" id="evalPanel" style="margin-top:1.5rem;display:none;">
+        <div class="panel-header">
+          <div class="panel-icon green">🎯</div>
+          <span class="panel-title">Evaluar función</span>
+        </div>
+        <div class="panel-body">
+          <div class="eval-row">
+            <div class="eval-input-wrap">
+              <span class="eval-label-float">x =</span>
+              <input type="number" class="eval-input" id="evalX" placeholder="0" step="any"/>
+            </div>
+            <button class="btn-eval" onclick="evalFunc()">Calcular y</button>
+          </div>
+          <div class="eval-result" id="evalResult">
+            f(<span id="evalXDisplay">—</span>) = <span id="evalYDisplay">—</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ─── Estado ───────────────────────────────────────────────
+  let points = [];
+  let currentCoefs = null; // [a, b, c]
+
+  // ─── Init con 3 filas vacías ───────────────────────────────
+  function init() {
+    addPoint(1, 0);
+    addPoint(2, 4);
+    addPoint(3, 9);
+  }
+
+  function addPoint(xVal = '', yVal = '') {
+    const id = Date.now() + Math.random();
+    points.push({ id, x: xVal, y: yVal });
+    renderTable();
+  }
+
+  function removePoint(id) {
+    if (points.length <= 1) return;
+    points = points.filter(p => p.id !== id);
+    renderTable();
+  }
+
+  function clearAll() {
+    points = [];
+    currentCoefs = null;
+    addPoint(); addPoint(); addPoint();
+    showEmpty();
+    hideMsg();
+    document.getElementById('evalPanel').style.display = 'none';
+  }
+
+  // ─── Render tabla ──────────────────────────────────────────
+  function renderTable() {
+    const tbody = document.getElementById('pointsBody');
+    tbody.innerHTML = '';
+    points.forEach((p, i) => {
+      const tr = document.createElement('tr');
+      tr.className = 'point-row';
+      tr.innerHTML = `
+        <td class="point-idx">${i + 1}</td>
+        <td>
+          <input type="number" class="coord-input" placeholder="x"
+            value="${p.x}" step="any"
+            oninput="updatePoint('${p.id}','x',this.value)"
+          />
+        </td>
+        <td>
+          <input type="number" class="coord-input" placeholder="y"
+            value="${p.y}" step="any"
+            oninput="updatePoint('${p.id}','y',this.value)"
+          />
+        </td>
+        <td>
+          <button class="btn-remove" onclick="removePoint('${p.id}')" title="Eliminar">✕</button>
+        </td>`;
+      tbody.appendChild(tr);
+    });
+  }
+
+  function updatePoint(id, field, val) {
+    const p = points.find(p => p.id == id);
+    if (p) p[field] = val;
+  }
+
+  // ─── Álgebra: mínimos cuadrados cuadrático ─────────────────
+  // Resuelve sistema Ax = b por eliminación Gaussiana
+  function gaussElim(A, b) {
+    const n = b.length;
+    // Aumentada
+    for (let i = 0; i < n; i++) A[i].push(b[i]);
+
+    for (let col = 0; col < n; col++) {
+      // Pivoteo parcial
+      let maxRow = col;
+      for (let row = col + 1; row < n; row++)
+        if (Math.abs(A[row][col]) > Math.abs(A[maxRow][col])) maxRow = row;
+      [A[col], A[maxRow]] = [A[maxRow], A[col]];
+
+      if (Math.abs(A[col][col]) < 1e-12) return null;
+
+      for (let row = col + 1; row < n; row++) {
+        const factor = A[row][col] / A[col][col];
+        for (let k = col; k <= n; k++) A[row][k] -= factor * A[col][k];
+      }
+    }
+    // Back substitution
+    const x = new Array(n).fill(0);
+    for (let i = n - 1; i >= 0; i--) {
+      x[i] = A[i][n];
+      for (let j = i + 1; j < n; j++) x[i] -= A[i][j] * x[j];
+      x[i] /= A[i][i];
+    }
+    return x;
+  }
+
+  // Mínimos cuadrados para grado 2: construye sistema normal 3×3
+  function leastSquaresQuadratic(xs, ys) {
+    const n = xs.length;
+    // Sumatorias necesarias
+    let s0=n, s1=0, s2=0, s3=0, s4=0, sy=0, sxy=0, sx2y=0;
+    for (let i = 0; i < n; i++) {
+      const xi = xs[i], yi = ys[i];
+      s1  += xi;
+      s2  += xi*xi;
+      s3  += xi*xi*xi;
+      s4  += xi*xi*xi*xi;
+      sy  += yi;
+      sxy += xi*yi;
+      sx2y+= xi*xi*yi;
+    }
+    // Sistema: [s4 s3 s2][a]   [sx2y]
+    //          [s3 s2 s1][b] = [sxy ]
+    //          [s2 s1 s0][c]   [sy  ]
+    const A = [
+      [s4, s3, s2],
+      [s3, s2, s1],
+      [s2, s1, s0]
+    ];
+    const b = [sx2y, sxy, sy];
+    return gaussElim(A, b); // [a, b, c]
+  }
+
+  // ─── Resolver ─────────────────────────────────────────────
+  function solve() {
+    hideMsg();
+
+    // Leer y validar puntos
+    const valid = [];
+    for (const p of points) {
+      const x = parseFloat(p.x), y = parseFloat(p.y);
+      if (isNaN(x) || isNaN(y)) continue;
+      valid.push({ x, y });
+    }
+
+    if (valid.length < 3) {
+      showMsg('Necesitás ingresar al menos 3 puntos con valores numéricos.', 'error');
+      return;
+    }
+
+    // Verificar x distintos
+    const xs = valid.map(p => p.x);
+    const unique = new Set(xs);
+    if (unique.size < 3) {
+      showMsg('Se necesitan al menos 3 valores de x distintos para una interpolación cuadrática única.', 'error');
+      return;
+    }
+
+    const ys = valid.map(p => p.y);
+    const coefs = leastSquaresQuadratic(xs, ys);
+    if (!coefs) {
+      showMsg('El sistema no tiene solución única. Verificá que los puntos no sean colineales o redundantes.', 'error');
+      return;
+    }
+
+    currentCoefs = coefs;
+
+    if (valid.length > 3) {
+      showMsg(`⚠ Tenés ${valid.length} puntos. Se usó mínimos cuadrados: la curva minimiza el error total, pero puede no pasar exactamente por todos los puntos.`, 'info');
+    }
+
+    renderResult(coefs, valid);
+    drawChart(coefs, valid);
+    document.getElementById('evalPanel').style.display = '';
+  }
+
+  // ─── Render resultado ─────────────────────────────────────
+  function fmt(n) {
+    const abs = Math.abs(n);
+    if (abs === 0) return '0';
+    if (abs >= 1000 || (abs < 0.001 && abs > 0)) return n.toExponential(4);
+    return parseFloat(n.toFixed(6)).toString();
+  }
+
+  function buildEquation(a, b, c) {
+    let eq = 'f(x) = ';
+    const fmtA = fmt(a), fmtB = fmt(Math.abs(b)), fmtC = fmt(Math.abs(c));
+    eq += `${fmtA}x²`;
+    if (b >= 0) eq += ` + ${fmtB}x`;
+    else        eq += ` − ${fmtB}x`;
+    if (c >= 0) eq += ` + ${fmtC}`;
+    else        eq += ` − ${fmtC}`;
+    return eq;
+  }
+
+  function renderResult([a, b, c], pts) {
+    const body = document.getElementById('resultBody');
+    body.innerHTML = `
+      <div class="equation-box">
+        <div class="equation-label">Función Cuadrática Interpolada</div>
+        <div class="equation-text">${buildEquation(a, b, c)}</div>
+      </div>
+      <div class="coef-grid">
+        <div class="coef-card">
+          <div class="coef-label">coef. a (x²)</div>
+          <div class="coef-value">${fmt(a)}</div>
+        </div>
+        <div class="coef-card">
+          <div class="coef-label">coef. b (x)</div>
+          <div class="coef-value">${fmt(b)}</div>
+        </div>
+        <div class="coef-card">
+          <div class="coef-label">coef. c (cte)</div>
+          <div class="coef-value">${fmt(c)}</div>
+        </div>
+      </div>
+      <div class="canvas-wrap">
+        <canvas id="chartCanvas" height="240"></canvas>
+      </div>`;
+  }
+
+  function showEmpty() {
+    document.getElementById('resultBody').innerHTML = `
+      <div class="result-empty">
+        <div class="result-empty-icon">∫</div>
+        <div>Ingresá al menos <strong>3 puntos</strong> y presioná<br/>"Calcular interpolación"</div>
+      </div>`;
+  }
+
+  // ─── Canvas gráfico ────────────────────────────────────────
+  function drawChart([a, b, c], pts) {
+    const canvas = document.getElementById('chartCanvas');
+    if (!canvas) return;
+    const dpr = window.devicePixelRatio || 1;
+    const W = canvas.parentElement.clientWidth;
+    const H = 240;
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+
+    const PAD = { top: 20, right: 20, bottom: 36, left: 48 };
+    const plotW = W - PAD.left - PAD.right;
+    const plotH = H - PAD.top - PAD.bottom;
+
+    // Rango X
+    const xMin = Math.min(...pts.map(p => p.x));
+    const xMax = Math.max(...pts.map(p => p.x));
+    const xRange = xMax - xMin || 2;
+    const xPad = xRange * 0.25;
+    const xL = xMin - xPad, xR = xMax + xPad;
+
+    // Evaluar curva para rango Y
+    const steps = 200;
+    const curveX = [], curveY = [];
+    for (let i = 0; i <= steps; i++) {
+      const x = xL + (xR - xL) * i / steps;
+      const y = a*x*x + b*x + c;
+      curveX.push(x); curveY.push(y);
+    }
+    const allY = [...curveY, ...pts.map(p => p.y)];
+    const yMin = Math.min(...allY), yMax = Math.max(...allY);
+    const yRange = yMax - yMin || 2;
+    const yPad = yRange * 0.2;
+    const yB = yMin - yPad, yT = yMax + yPad;
+
+    const toPixX = x => PAD.left + (x - xL) / (xR - xL) * plotW;
+    const toPixY = y => PAD.top  + (yT - y) / (yT - yB) * plotH;
+
+    // Fondo
+    ctx.fillStyle = '#111827';
+    ctx.fillRect(0, 0, W, H);
+
+    // Grid
+    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+    ctx.lineWidth = 1;
+    const nGridX = 6, nGridY = 5;
+    for (let i = 0; i <= nGridX; i++) {
+      const x = toPixX(xL + (xR - xL) * i / nGridX);
+      ctx.beginPath(); ctx.moveTo(x, PAD.top); ctx.lineTo(x, PAD.top + plotH); ctx.stroke();
+    }
+    for (let i = 0; i <= nGridY; i++) {
+      const y = toPixY(yB + (yT - yB) * i / nGridY);
+      ctx.beginPath(); ctx.moveTo(PAD.left, y); ctx.lineTo(PAD.left + plotW, y); ctx.stroke();
+    }
+
+    // Ejes
+    const x0pix = toPixX(0), y0pix = toPixY(0);
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+    ctx.lineWidth = 1;
+    if (x0pix >= PAD.left && x0pix <= PAD.left + plotW) {
+      ctx.beginPath(); ctx.moveTo(x0pix, PAD.top); ctx.lineTo(x0pix, PAD.top + plotH); ctx.stroke();
+    }
+    if (y0pix >= PAD.top && y0pix <= PAD.top + plotH) {
+      ctx.beginPath(); ctx.moveTo(PAD.left, y0pix); ctx.lineTo(PAD.left + plotW, y0pix); ctx.stroke();
+    }
+
+    // Curva (gradiente)
+    const grad = ctx.createLinearGradient(PAD.left, 0, PAD.left + plotW, 0);
+    grad.addColorStop(0, '#7c3aed');
+    grad.addColorStop(1, '#00d4ff');
+    ctx.strokeStyle = grad;
+    ctx.lineWidth = 2.5;
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    curveX.forEach((x, i) => {
+      const px = toPixX(x), py = toPixY(curveY[i]);
+      i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+    });
+    ctx.stroke();
+
+    // Área bajo la curva
+    ctx.save();
+    const areaGrad = ctx.createLinearGradient(0, PAD.top, 0, PAD.top + plotH);
+    areaGrad.addColorStop(0, 'rgba(0,212,255,0.12)');
+    areaGrad.addColorStop(1, 'rgba(0,212,255,0)');
+    ctx.fillStyle = areaGrad;
+    ctx.beginPath();
+    ctx.moveTo(toPixX(curveX[0]), toPixY(0));
+    curveX.forEach((x, i) => ctx.lineTo(toPixX(x), toPixY(curveY[i])));
+    ctx.lineTo(toPixX(curveX[curveX.length - 1]), toPixY(0));
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    // Labels eje X
+    ctx.fillStyle = 'rgba(100,116,139,0.8)';
+    ctx.font = `${10 * dpr / dpr}px "Space Mono", monospace`;
+    ctx.textAlign = 'center';
+    for (let i = 0; i <= nGridX; i++) {
+      const xv = xL + (xR - xL) * i / nGridX;
+      const px = toPixX(xv);
+      ctx.fillText(parseFloat(xv.toFixed(2)), px, PAD.top + plotH + 18);
+    }
+
+    // Labels eje Y
+    ctx.textAlign = 'right';
+    for (let i = 0; i <= nGridY; i++) {
+      const yv = yB + (yT - yB) * i / nGridY;
+      const py = toPixY(yv);
+      ctx.fillText(parseFloat(yv.toFixed(2)), PAD.left - 6, py + 4);
+    }
+
+    // Puntos
+    pts.forEach(p => {
+      const px = toPixX(p.x), py = toPixY(p.y);
+      // Halo
+      ctx.beginPath();
+      ctx.arc(px, py, 8, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(0,212,255,0.15)';
+      ctx.fill();
+      // Punto
+      ctx.beginPath();
+      ctx.arc(px, py, 4.5, 0, Math.PI * 2);
+      ctx.fillStyle = '#00d4ff';
+      ctx.strokeStyle = '#0a0e1a';
+      ctx.lineWidth = 1.5;
+      ctx.fill();
+      ctx.stroke();
+
+      // Etiqueta
+      ctx.fillStyle = 'rgba(226,232,240,0.8)';
+      ctx.font = `9px "Space Mono", monospace`;
+      ctx.textAlign = 'center';
+      ctx.fillText(`(${fmt(p.x)}, ${fmt(p.y)})`, px, py - 12);
+    });
+  }
+
+  // ─── Evaluar ──────────────────────────────────────────────
+  function evalFunc() {
+    if (!currentCoefs) return;
+    const xVal = parseFloat(document.getElementById('evalX').value);
+    if (isNaN(xVal)) return;
+    const [a, b, c] = currentCoefs;
+    const yVal = a*xVal*xVal + b*xVal + c;
+    const res = document.getElementById('evalResult');
+    document.getElementById('evalXDisplay').textContent = fmt(xVal);
+    document.getElementById('evalYDisplay').textContent = fmt(yVal);
+    res.style.display = '';
+  }
+
+  // También evaluar con Enter
+  document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('evalX')?.addEventListener('keydown', e => {
+      if (e.key === 'Enter') evalFunc();
+    });
+  });
+
+  // ─── Mensajes ─────────────────────────────────────────────
+  function showMsg(text, type = 'error') {
+    const el = document.getElementById('msgBox');
+    el.textContent = text;
+    el.className = `msg ${type}`;
+  }
+  function hideMsg() {
+    const el = document.getElementById('msgBox');
+    el.className = 'msg';
+  }
+
+  // ─── Start ────────────────────────────────────────────────
+  init();
+</script>
+</body>
+</html>
